@@ -1,6 +1,6 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, String};
 use soroban_sdk::token::TokenInterface;
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, String};
 
 mod events;
 
@@ -25,6 +25,54 @@ pub struct SoroMintToken;
 
 #[contractimpl]
 impl SoroMintToken {
+    fn read_balance(e: &Env, id: &Address) -> i128 {
+        e.storage()
+            .persistent()
+            .get(&DataKey::Balance(id.clone()))
+            .unwrap_or(0)
+    }
+
+    fn read_allowance(e: &Env, from: &Address, spender: &Address) -> i128 {
+        e.storage()
+            .persistent()
+            .get(&DataKey::Allowance(from.clone(), spender.clone()))
+            .unwrap_or(0)
+    }
+
+    fn write_balance(e: &Env, id: &Address, balance: i128) {
+        e.storage()
+            .persistent()
+            .set(&DataKey::Balance(id.clone()), &balance);
+    }
+
+    fn write_allowance(e: &Env, from: &Address, spender: &Address, amount: i128) {
+        e.storage()
+            .persistent()
+            .set(&DataKey::Allowance(from.clone(), spender.clone()), &amount);
+    }
+
+    fn move_balance(e: &Env, from: &Address, to: &Address, amount: i128) -> (i128, i128) {
+        let from_balance = Self::read_balance(e, from);
+        if from_balance < amount {
+            panic!("insufficient balance");
+        }
+
+        if from == to {
+            return (from_balance, from_balance);
+        }
+
+        let new_from_balance = from_balance
+            .checked_sub(amount)
+            .expect("balance underflow");
+        let to_balance = Self::read_balance(e, to);
+        let new_to_balance = to_balance.checked_add(amount).expect("balance overflow");
+
+        Self::write_balance(e, from, new_from_balance);
+        Self::write_balance(e, to, new_to_balance);
+
+        (new_from_balance, new_to_balance)
+    }
+
     /// Initializes the SoroMint token contract.
     ///
     /// # Arguments
@@ -61,16 +109,13 @@ impl SoroMintToken {
         if amount <= 0 {
             panic!("mint amount must be positive");
         }
-        
-        // Cache instance storage handle
+
         let instance = e.storage().instance();
         let admin: Address = instance.get(&DataKey::Admin).unwrap();
         admin.require_auth();
 
-        // Optimize: Cache persistent storage handle and minimize clones
         let persistent = e.storage().persistent();
         let mut balance: i128 = persistent.get(&DataKey::Balance(to.clone())).unwrap_or(0);
-        
         balance = balance.checked_add(amount).expect("balance overflow");
         persistent.set(&DataKey::Balance(to.clone()), &balance);
 
@@ -96,7 +141,6 @@ impl SoroMintToken {
         prev_admin.require_auth();
 
         e.storage().instance().set(&DataKey::Admin, &new_admin);
-
         events::emit_ownership_transfer(&e, &prev_admin, &new_admin);
     }
 
@@ -165,40 +209,24 @@ impl SoroMintToken {
 
 #[contractimpl]
 impl token::TokenInterface for SoroMintToken {
-    /// Returns the allowance for `spender` on `from`'s tokens.
     fn allowance(e: Env, from: Address, spender: Address) -> i128 {
-        e.storage()
-            .persistent()
-            .get(&DataKey::Allowance(from, spender))
-            .unwrap_or(0)
+        Self::read_allowance(&e, &from, &spender)
     }
 
-    /// Approves `spender` to spend `amount` of `from`'s tokens.
     fn approve(e: Env, from: Address, spender: Address, amount: i128, _expiration_ledger: u32) {
         from.require_auth();
         if amount < 0 {
             panic!("approval amount must be non-negative");
         }
 
-        e.storage()
-            .persistent()
-            .set(&DataKey::Allowance(from.clone(), spender.clone()), &amount);
+        Self::write_allowance(&e, &from, &spender, amount);
+        events::emit_approve(&e, &from, &spender, amount);
     }
 
-    /// Returns the token balance for a given address.
     fn balance(e: Env, id: Address) -> i128 {
-        e.storage()
-            .persistent()
-            .get(&DataKey::Balance(id))
-            .unwrap_or(0)
+        Self::read_balance(&e, &id)
     }
 
-    /// @notice Transfers `amount` tokens from `from` to `to`.
-    /// @dev Optimizes gas by caching persistent storage handle and minimizing Address clones.
-    /// @param from The address sending the tokens.
-    /// @param to The address receiving the tokens.
-    /// @param amount The quantity of tokens to transfer.
-    /// @auth Requires `from` to authorize the transaction.
     fn transfer(e: Env, from: Address, to: Address, amount: i128) {
         soromint_lifecycle::require_not_paused(&e);
         from.require_auth();
@@ -206,31 +234,10 @@ impl token::TokenInterface for SoroMintToken {
             panic!("transfer amount must be positive");
         }
 
-        let persistent = e.storage().persistent();
-        let from_key = DataKey::Balance(from.clone());
-        let mut from_balance: i128 = persistent.get(&from_key).unwrap_or(0);
-        
-        if from_balance < amount {
-            panic!("insufficient balance");
-        }
-        from_balance -= amount;
-        persistent.set(&from_key, &from_balance);
-
-        let to_key = DataKey::Balance(to.clone());
-        let mut to_balance: i128 = persistent.get(&to_key).unwrap_or(0);
-        to_balance = to_balance.checked_add(amount).expect("balance overflow");
-        persistent.set(&to_key, &to_balance);
-        
-        // Note: Token standard event emission is typically expected here but not in original
+        let (new_from_balance, new_to_balance) = Self::move_balance(&e, &from, &to, amount);
+        events::emit_transfer(&e, &from, &to, amount, new_from_balance, new_to_balance);
     }
 
-    /// @notice Transfers `amount` tokens from `from` to `to` using allowance.
-    /// @dev Optimizes gas by caching persistent storage and reducing redundant lookups.
-    /// @param spender The address authorized to spend the tokens.
-    /// @param from The address from which tokens are taken.
-    /// @param to The address receiving the tokens.
-    /// @param amount The quantity of tokens to transfer.
-    /// @auth Requires `spender` to authorize the transaction.
     fn transfer_from(e: Env, spender: Address, from: Address, to: Address, amount: i128) {
         soromint_lifecycle::require_not_paused(&e);
         spender.require_auth();
@@ -238,35 +245,29 @@ impl token::TokenInterface for SoroMintToken {
             panic!("transfer amount must be positive");
         }
 
-        let persistent = e.storage().persistent();
-        let allowance_key = DataKey::Allowance(from.clone(), spender.clone());
-        let mut allowance: i128 = persistent.get(&allowance_key).unwrap_or(0);
-        
+        let allowance = Self::read_allowance(&e, &from, &spender);
         if allowance < amount {
             panic!("insufficient allowance");
         }
-        allowance -= amount;
-        persistent.set(&allowance_key, &allowance);
 
-        let from_key = DataKey::Balance(from.clone());
-        let mut from_balance: i128 = persistent.get(&from_key).unwrap_or(0);
-        if from_balance < amount {
-            panic!("insufficient balance");
-        }
-        from_balance -= amount;
-        persistent.set(&from_key, &from_balance);
+        let remaining_allowance = allowance
+            .checked_sub(amount)
+            .expect("allowance underflow");
+        let (new_from_balance, new_to_balance) = Self::move_balance(&e, &from, &to, amount);
 
-        let to_key = DataKey::Balance(to.clone());
-        let mut to_balance: i128 = persistent.get(&to_key).unwrap_or(0);
-        to_balance = to_balance.checked_add(amount).expect("balance overflow");
-        persistent.set(&to_key, &to_balance);
+        Self::write_allowance(&e, &from, &spender, remaining_allowance);
+        events::emit_transfer_from(
+            &e,
+            &spender,
+            &from,
+            &to,
+            amount,
+            remaining_allowance,
+            new_from_balance,
+            new_to_balance,
+        );
     }
 
-    /// @notice Burns `amount` tokens from `from`.
-    /// @dev Optimizes gas by caching storage handles and reducing redundant lookups.
-    /// @param from The address from which tokens are burned.
-    /// @param amount The quantity of tokens to burn.
-    /// @auth Requires `from` to authorize the transaction.
     fn burn(e: Env, from: Address, amount: i128) {
         soromint_lifecycle::require_not_paused(&e);
         from.require_auth();
@@ -274,29 +275,22 @@ impl token::TokenInterface for SoroMintToken {
             panic!("burn amount must be positive");
         }
 
-        let persistent = e.storage().persistent();
-        let mut balance: i128 = persistent.get(&DataKey::Balance(from.clone())).unwrap_or(0);
+        let balance = Self::read_balance(&e, &from);
         if balance < amount {
             panic!("insufficient balance");
         }
-        balance -= amount;
-        persistent.set(&DataKey::Balance(from.clone()), &balance);
+        let new_balance = balance.checked_sub(amount).expect("balance underflow");
+        Self::write_balance(&e, &from, new_balance);
 
         let instance = e.storage().instance();
         let mut supply: i128 = instance.get(&DataKey::Supply).unwrap_or(0);
-        supply -= amount;
+        supply = supply.checked_sub(amount).expect("supply underflow");
         instance.set(&DataKey::Supply, &supply);
 
         let admin: Address = instance.get(&DataKey::Admin).unwrap();
-        events::emit_burn(&e, &admin, &from, amount, balance, supply);
+        events::emit_burn(&e, &admin, &from, amount, new_balance, supply);
     }
 
-    /// @notice Burns `amount` tokens from `from` using allowance.
-    /// @dev Optimizes gas by caching storage handles and reducing redundant lookups.
-    /// @param spender The address authorized to burn the tokens.
-    /// @param from The address from which tokens are taken.
-    /// @param amount The quantity of tokens to burn.
-    /// @auth Requires `spender` to authorize the transaction.
     fn burn_from(e: Env, spender: Address, from: Address, amount: i128) {
         soromint_lifecycle::require_not_paused(&e);
         spender.require_auth();
@@ -304,38 +298,35 @@ impl token::TokenInterface for SoroMintToken {
             panic!("burn amount must be positive");
         }
 
-        let persistent = e.storage().persistent();
-        let allowance_key = DataKey::Allowance(from.clone(), spender.clone());
-        let mut allowance: i128 = persistent.get(&allowance_key).unwrap_or(0);
+        let allowance = Self::read_allowance(&e, &from, &spender);
         if allowance < amount {
             panic!("insufficient allowance");
         }
-        allowance -= amount;
-        persistent.set(&allowance_key, &allowance);
+        let remaining_allowance = allowance
+            .checked_sub(amount)
+            .expect("allowance underflow");
+        Self::write_allowance(&e, &from, &spender, remaining_allowance);
 
-        let from_key = DataKey::Balance(from.clone());
-        let mut from_balance: i128 = persistent.get(&from_key).unwrap_or(0);
-        if from_balance < amount {
+        let balance = Self::read_balance(&e, &from);
+        if balance < amount {
             panic!("insufficient balance");
         }
-        from_balance -= amount;
-        persistent.set(&from_key, &from_balance);
+        let new_balance = balance.checked_sub(amount).expect("balance underflow");
+        Self::write_balance(&e, &from, new_balance);
 
         let instance = e.storage().instance();
         let mut supply: i128 = instance.get(&DataKey::Supply).unwrap_or(0);
-        supply -= amount;
+        supply = supply.checked_sub(amount).expect("supply underflow");
         instance.set(&DataKey::Supply, &supply);
 
         let admin: Address = instance.get(&DataKey::Admin).unwrap();
-        events::emit_burn(&e, &admin, &from, amount, from_balance, supply);
+        events::emit_burn(&e, &admin, &from, amount, new_balance, supply);
     }
 
-    /// Returns the number of decimal places for the token.
     fn decimals(e: Env) -> u32 {
         e.storage().instance().get(&DataKey::Decimals).unwrap_or(7)
     }
 
-    /// Returns the name of the token.
     fn name(e: Env) -> String {
         e.storage()
             .instance()
@@ -343,7 +334,6 @@ impl token::TokenInterface for SoroMintToken {
             .unwrap_or_else(|| String::from_str(&e, "SoroMint"))
     }
 
-    /// Returns the symbol of the token.
     fn symbol(e: Env) -> String {
         e.storage()
             .instance()
