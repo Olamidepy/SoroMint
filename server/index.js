@@ -12,6 +12,7 @@ initEnv();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const { securityHeaders } = require("./middleware/security-headers");
 
 const { errorHandler, notFoundHandler } = require("./middleware/error-handler");
 const {
@@ -30,6 +31,7 @@ const tokenRoutes = require("./routes/token-routes");
 const createApp = ({ authRouter = authRoutes, tokenRouter = tokenRoutes } = {}) => {
   const app = express();
 
+  app.use(securityHeaders);
   app.use(cors());
   app.use(express.json());
 
