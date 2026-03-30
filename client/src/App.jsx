@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Wallet, Coins, Plus, List, ArrowRight, ShieldCheck } from 'lucide-react';
+import { SkeletonList, SkeletonTokenForm } from './components/Skeleton';
 
 const API_BASE = 'http://localhost:5000/api';
 
@@ -13,6 +14,7 @@ function App() {
     decimals: 7
   });
   const [isMinting, setIsMinting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Placeholder for Wallet Connection (Freighter/Albedo)
   const connectWallet = async () => {
@@ -24,10 +26,13 @@ function App() {
 
   const fetchTokens = async (userAddress) => {
     try {
+      setIsLoading(true);
       const resp = await axios.get(`${API_BASE}/tokens/${userAddress}`);
       setTokens(resp.data);
     } catch (err) {
       console.error('Error fetching tokens', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -86,7 +91,10 @@ function App() {
               <Plus size={20} className="text-stellar-blue" />
               Mint New Token
             </h2>
-            <form onSubmit={handleMint} className="space-y-4">
+            {isLoading ? (
+              <SkeletonTokenForm />
+            ) : (
+              <form onSubmit={handleMint} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-400 mb-1">Token Name</label>
                 <input 
@@ -128,6 +136,7 @@ function App() {
                 {!isMinting && <ArrowRight size={18} />}
               </button>
             </form>
+            )}
           </div>
         </section>
 
@@ -143,6 +152,10 @@ function App() {
               <div className="flex flex-col items-center justify-center h-64 text-slate-500">
                 <ShieldCheck size={48} className="mb-4 opacity-20" />
                 <p>Connect your wallet to see your assets</p>
+              </div>
+            ) : isLoading ? (
+              <div className="py-8">
+                <SkeletonList count={5} />
               </div>
             ) : tokens.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-slate-500">
