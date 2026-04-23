@@ -4,6 +4,7 @@ const {
   Asset, 
   Operation, 
   TransactionBuilder, 
+  Keypair,
   Networks,
   Address,
   Contract,
@@ -235,11 +236,100 @@ const submitBatchOperations = async (operations, sourcePublicKey) => {
   };
 };
 
+/**
+ * @title buildFeeBumpTransaction
+ * @notice Wraps a signed inner transaction in a fee-bump sponsored by the platform.
+ * @param {Object} params
+ * @param {string} params.innerTransactionXdr - Base64 XDR for the signed inner transaction.
+ * @param {string} params.sponsorSecretKey - Secret key for the sponsoring platform account.
+ * @param {number|string} params.baseFeeStroops - Per-operation fee bid in stroops.
+ * @param {string} [params.networkPassphrase] - Optional network passphrase override.
+ * @returns {{ innerTransaction: Object, feeBumpTransaction: Object, feeBumpXdr: string }}
+ */
+const buildFeeBumpTransaction = ({
+  innerTransactionXdr,
+  sponsorSecretKey,
+  baseFeeStroops,
+  networkPassphrase,
+}) => {
+  const env = getEnv();
+
+  if (!innerTransactionXdr || typeof innerTransactionXdr !== 'string') {
+    throw new Error('innerTransactionXdr is required');
+  }
+
+  if (!sponsorSecretKey) {
+    throw new Error('sponsorSecretKey is required');
+  }
+
+  const passphrase = networkPassphrase || env.NETWORK_PASSPHRASE;
+  const sponsorKeypair = Keypair.fromSecret(sponsorSecretKey);
+  const innerTransaction = TransactionBuilder.fromXDR(
+    innerTransactionXdr,
+    passphrase
+  );
+  const feeBumpTransaction = TransactionBuilder.buildFeeBumpTransaction(
+    sponsorKeypair,
+    String(baseFeeStroops),
+    innerTransaction,
+    passphrase
+  );
+
+  feeBumpTransaction.sign(sponsorKeypair);
+
+  return {
+    innerTransaction,
+    feeBumpTransaction,
+    feeBumpXdr: feeBumpTransaction.toXDR(),
+  };
+};
+
+/**
+ * @title submitFeeBumpTransaction
+ * @notice Builds and submits a fee-bump transaction to the configured Soroban RPC.
+ * @param {Object} params
+ * @param {string} params.innerTransactionXdr - Base64 XDR for the signed inner transaction.
+ * @param {string} params.sponsorSecretKey - Secret key for the sponsoring platform account.
+ * @param {number|string} params.baseFeeStroops - Per-operation fee bid in stroops.
+ * @param {string} [params.networkPassphrase] - Optional network passphrase override.
+ * @returns {Promise<Object>} Submission result with hash, status, and fee-bump XDR.
+ */
+const submitFeeBumpTransaction = async ({
+  innerTransactionXdr,
+  sponsorSecretKey,
+  baseFeeStroops,
+  networkPassphrase,
+}) => {
+  const server = getRpcServer();
+  const { feeBumpTransaction, feeBumpXdr } = buildFeeBumpTransaction({
+    innerTransactionXdr,
+    sponsorSecretKey,
+    baseFeeStroops,
+    networkPassphrase,
+  });
+
+  const sendResult = await server.execute((s) => s.sendTransaction(feeBumpTransaction));
+
+  logger.info('Fee-bump transaction submitted', {
+    hash: sendResult.hash,
+    status: sendResult.status,
+    baseFeeStroops: Number(baseFeeStroops),
+  });
+
+  return {
+    success: sendResult.status !== 'ERROR',
+    hash: sendResult.hash,
+    status: sendResult.status,
+    feeBumpXdr,
+  };
+};
+
 module.exports = {
   getRpcServer,
   wrapAsset,
   deployStellarAssetContract,
   FailoverRpcServer,
   submitBatchOperations,
+  buildFeeBumpTransaction,
+  submitFeeBumpTransaction,
 };
-
