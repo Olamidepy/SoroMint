@@ -59,11 +59,6 @@ function validateEnv() {
       default: "Test SDF Network ; September 2015",
       desc: "Stellar network passphrase",
     }),
-    HORIZON_URL: envalid.url({
-      default: "https://horizon-testnet.stellar.org",
-      desc: "Horizon server URL for event streaming",
-      example: "https://horizon-testnet.stellar.org",
-    }),
     ADMIN_SECRET_KEY: envalid.str({
       default: "",
       desc: "Optional secret key for admin bypass",
@@ -93,6 +88,7 @@ function validateEnv() {
       default: getDefaultCorsAllowedOrigins(),
       desc: "Comma-separated list of allowed frontend origins for cross-origin requests",
       example: "https://app.example.com,https://admin.example.com",
+    }),
     METRICS_INTERVAL_MS: envalid.num({
       default: 30000,
       desc: "Resource metrics sampling interval in milliseconds",
@@ -135,7 +131,6 @@ function validateEnv() {
   });
 
   let corsAllowedOrigins;
-
   try {
     corsAllowedOrigins = parseAllowedOrigins(cleanEnv.CORS_ALLOWED_ORIGINS);
   } catch (error) {
@@ -145,13 +140,6 @@ function validateEnv() {
   const validatedConfig = Object.freeze({
     ...cleanEnv,
     CORS_ALLOWED_ORIGINS: corsAllowedOrigins,
-  logger.info("Environment variables validated successfully", {
-    nodeEnv: cleanEnv.NODE_ENV,
-    port: cleanEnv.PORT,
-    mongoUri: cleanEnv.MONGO_URI ? cleanEnv.MONGO_URI.replace(/\/\/.*@/, "//***@") : undefined,
-    sorobanRpcUrls: cleanEnv.SOROBAN_RPC_URLS || cleanEnv.SOROBAN_RPC_URL,
-    redisUrl: cleanEnv.REDIS_URL ? cleanEnv.REDIS_URL.replace(/:.+@/, ":***@") : undefined,
-    cacheTtlMetadata: cleanEnv.CACHE_TTL_METADATA,
   });
 
   logger.info("Environment variables validated successfully", {
@@ -169,10 +157,6 @@ function validateEnv() {
 
 let validatedEnv = null;
 
-/**
- * @notice Initialize and cache the validated environment variables
- * @returns {Object} Validated environment variables
- */
 function initEnv() {
   if (!validatedEnv) {
     try {
@@ -186,7 +170,6 @@ function initEnv() {
       console.error(
         "\nPlease check your .env file and ensure all required variables are set.",
       );
-      console.error("See docs/env-variables.md for more information.\n");
       throw error;
     }
   }
@@ -194,10 +177,6 @@ function initEnv() {
   return validatedEnv;
 }
 
-/**
- * @notice Returns the cached environment or initializes it on first access
- * @returns {Object} Validated environment variables
- */
 function getEnv() {
   if (!validatedEnv) {
     return initEnv();
