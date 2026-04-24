@@ -5,13 +5,13 @@
  * @dev Prevents server from starting if required environment variables are missing
  */
 
-require("dotenv").config();
-const envalid = require("envalid");
-const { logger } = require("../utils/logger");
+require('dotenv').config();
+const envalid = require('envalid');
+const { logger } = require('../utils/logger');
 const {
   getDefaultCorsAllowedOrigins,
   parseAllowedOrigins,
-} = require("./cors-origins");
+} = require('./cors-origins');
 
 /**
  * @notice Validates all required environment variables
@@ -159,7 +159,7 @@ function validateEnv() {
       if (Object.keys(errors).length > 0) {
         throw new Error("Validation Error: " + Object.keys(errors).join(", "));
       }
-    }
+    },
   });
 
   let corsAllowedOrigins;
@@ -174,13 +174,14 @@ function validateEnv() {
     CORS_ALLOWED_ORIGINS: corsAllowedOrigins,
   });
 
-  logger.info("Environment variables validated successfully", {
+  logger.info('Environment variables validated successfully', {
     nodeEnv: validatedConfig.NODE_ENV,
     port: validatedConfig.PORT,
     mongoUri: validatedConfig.MONGO_URI
-      ? validatedConfig.MONGO_URI.replace(/\/\/.*@/, "//***@")
+      ? validatedConfig.MONGO_URI.replace(/\/\/.*@/, '//***@')
       : undefined,
-    sorobanRpcUrls: validatedConfig.SOROBAN_RPC_URLS || validatedConfig.SOROBAN_RPC_URL,
+    sorobanRpcUrls:
+      validatedConfig.SOROBAN_RPC_URLS || validatedConfig.SOROBAN_RPC_URL,
     corsAllowedOrigins: validatedConfig.CORS_ALLOWED_ORIGINS,
   });
 
@@ -194,13 +195,13 @@ function initEnv() {
     try {
       validatedEnv = validateEnv();
     } catch (error) {
-      logger.error("Environment validation failed", {
+      logger.error('Environment validation failed', {
         error: error.message,
       });
-      console.error("\n❌ Environment Validation Error:");
+      console.error('\n❌ Environment Validation Error:');
       console.error(error.message);
       console.error(
-        "\nPlease check your .env file and ensure all required variables are set.",
+        '\nPlease check your .env file and ensure all required variables are set.'
       );
       throw error;
     }
