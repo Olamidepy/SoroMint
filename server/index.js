@@ -1,4 +1,4 @@
-require("dotenv").config();
+require('dotenv').config();
 
 /**
  * @title SoroMint Server Entry Point
@@ -6,81 +6,64 @@ require("dotenv").config();
  * @notice Initializes the backend and registers all route modules
  */
 
-const { initEnv, getEnv } = require("./config/env-config");
+const { initEnv, getEnv } = require('./config/env-config');
 initEnv();
 
-const { scheduleBackups } = require("./services/backup-service");
-const { getCacheService } = require("./services/cache-service");
+const { scheduleBackups } = require('./services/backup-service');
+const { getCacheService } = require('./services/cache-service');
 
-const express = require("express");
-const mongoose = require("mongoose");
-const cors = require("cors");
-const session = require("express-session");
-const passport = require("passport");
-const { initPassport } = require("./config/passport-config");
-const { securityHeaders } = require("./middleware/security-headers");
-const { createCorsOptionsDelegate } = require("./config/cors-config");
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const { securityHeaders } = require('./middleware/security-headers');
+const { createCorsOptionsDelegate } = require('./config/cors-config');
 
-const { initSentry } = require("./config/sentry");
-const { errorHandler, notFoundHandler } = require("./middleware/error-handler");
+const { initSentry } = require('./config/sentry');
+const { errorHandler, notFoundHandler } = require('./middleware/error-handler');
 const {
   logger,
   correlationIdMiddleware,
   httpLoggerMiddleware,
   logStartupInfo,
   logDatabaseConnection,
-} = require("./utils/logger");
-const { setupSwagger } = require("./config/swagger");
-const { sampler } = require("./services/resource-sampler");
-const authRoutes = require("./routes/auth-routes");
-const statusRoutes = require("./routes/status-routes");
-const auditRoutes = require("./routes/audit-routes");
-const tokenRoutes = require("./routes/token-routes");
-const webhookRoutes = require("./routes/webhook-routes");
-const bridgeRoutes = require("./routes/bridge-routes");
-const analyticsRoutes = require("./routes/analytics-routes");
-const notificationRoutes = require("./routes/notification-routes");
-const multiSigRoutes = require("./routes/multisig-routes");
-const vaultRoutes = require("./routes/vault-routes");
-const { getBridgeRelayer } = require("./services/bridge-relayer");
+} = require('./utils/logger');
+const { setupSwagger } = require('./config/swagger');
+const { sampler } = require('./services/resource-sampler');
+const authRoutes = require('./routes/auth-routes');
+const statusRoutes = require('./routes/status-routes');
+const auditRoutes = require('./routes/audit-routes');
+const tokenRoutes = require('./routes/token-routes');
+const webhookRoutes = require('./routes/webhook-routes');
+const analyticsRoutes = require('./routes/analytics-routes');
+const notificationRoutes = require('./routes/notification-routes');
+const votingRoutes = require('./routes/voting-routes');
 
-const createApp = ({ authRouter = authRoutes, tokenRouter = tokenRoutes } = {}) => {
+const createApp = ({
+  authRouter = authRoutes,
+  tokenRouter = tokenRoutes,
+  votingRouter = votingRoutes,
+} = {}) => {
   const app = express();
   const corsMiddleware = cors(createCorsOptionsDelegate());
-  const env = getEnv();
 
   initSentry(app);
-  initPassport();
-
   app.use(securityHeaders);
   app.use(correlationIdMiddleware);
   app.use(httpLoggerMiddleware);
   app.use(corsMiddleware);
-  app.options("*", corsMiddleware);
+  app.options('*', corsMiddleware);
   app.use(express.json());
-  
-  // Passport and Session setup
-  app.use(session({
-    secret: env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: { secure: env.NODE_ENV === 'production' }
-  }));
-  app.use(passport.initialize());
-  app.use(passport.session());
 
   setupSwagger(app);
 
-  app.use("/api", statusRoutes);
-  app.use("/api", auditRoutes);
-  app.use("/api", tokenRouter);
-  app.use("/api", analyticsRoutes);
-  app.use("/api", notificationRoutes);
-  app.use("/api", bridgeRoutes);
-  app.use("/api/auth", authRouter);
-  app.use("/api", webhookRoutes);
-  app.use("/api/multisig", multiSigRoutes);
-  app.use("/api/vault", vaultRoutes);
+  app.use('/api', statusRoutes);
+  app.use('/api', auditRoutes);
+  app.use('/api', tokenRouter);
+  app.use('/api', analyticsRoutes);
+  app.use('/api', notificationRoutes);
+  app.use('/api/auth', authRouter);
+  app.use('/api', webhookRoutes);
+  app.use('/api', votingRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
@@ -107,40 +90,33 @@ const startServer = async () => {
   const cacheService = getCacheService();
   try {
     await cacheService.initialize();
-    logger.info("Cache service initialized successfully");
+    logger.info('Cache service initialized successfully');
   } catch (error) {
-    logger.warn("Cache service initialization failed, continuing without cache", {
-      error: error.message,
-    });
+    logger.warn(
+      'Cache service initialization failed, continuing without cache',
+      {
+        error: error.message,
+      }
+    );
   }
 
   await connectDatabase();
   const app = createApp();
 
-  const bridgeRelayer = getBridgeRelayer();
-  if (bridgeRelayer.enabled && bridgeRelayer.isConfigured()) {
-    try {
-      await bridgeRelayer.start();
-      logger.info("Bridge relayer auto-started");
-    } catch (error) {
-      logger.warn("Bridge relayer failed to start", {
-        error: error.message,
-      });
-    }
-  }
-
   app.listen(env.PORT, () => {
     logStartupInfo(env.PORT, env.NETWORK_PASSPHRASE);
     sampler.start();
     console.log(`Server running on http://localhost:${env.PORT}`);
-    console.log(`API Documentation available at http://localhost:${env.PORT}/api-docs`);
+    console.log(
+      `API Documentation available at http://localhost:${env.PORT}/api-docs`
+    );
     scheduleBackups();
   });
 };
 
 if (require.main === module) {
   startServer().catch((error) => {
-    logger.error("Server failed to start", { error: error.message });
+    logger.error('Server failed to start', { error: error.message });
     setImmediate(() => {
       throw error;
     });
