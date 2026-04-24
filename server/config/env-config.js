@@ -5,13 +5,13 @@
  * @dev Prevents server from starting if required environment variables are missing
  */
 
-require("dotenv").config();
-const envalid = require("envalid");
-const { logger } = require("../utils/logger");
+require('dotenv').config();
+const envalid = require('envalid');
+const { logger } = require('../utils/logger');
 const {
   getDefaultCorsAllowedOrigins,
   parseAllowedOrigins,
-} = require("./cors-origins");
+} = require('./cors-origins');
 
 /**
  * @notice Validates all required environment variables
@@ -122,61 +122,12 @@ function validateEnv() {
       default: 3600,
       desc: "Cache TTL (Time-To-Live) in seconds for token metadata (default: 1 hour)",
     }),
-    BRIDGE_RELAYER_ENABLED: envalid.bool({
-      default: false,
-      desc: "Enable the cross-chain bridge relayer on server startup",
-    }),
-    BRIDGE_RELAYER_DIRECTION: envalid.str({
-      default: "both",
-      choices: ["both", "soroban-to-evm", "evm-to-soroban"],
-      desc: "Direction that the relayer should monitor",
-    }),
-    BRIDGE_SOROBAN_ACCOUNT_ID: envalid.str({
-      default: "",
-      desc: "Soroban account or bridge contract ID to watch for on-chain events",
-    }),
-    BRIDGE_SOROBAN_RPC_URL: envalid.str({
-      default: "",
-      desc: "Soroban RPC URL for bridge event streaming (leave empty to use SOROBAN_RPC_URL)",
-    }),
-    BRIDGE_EVM_RPC_URL: envalid.str({
-      default: "",
-      desc: "JSON-RPC endpoint for the EVM-compatible chain",
-    }),
-    BRIDGE_EVM_BRIDGE_ADDRESS: envalid.str({
-      default: "",
-      desc: "Bridge contract address on the EVM-compatible chain",
-    }),
-    BRIDGE_EVM_BRIDGE_ABI: envalid.str({
-      default: "",
-      desc: "JSON-encoded ABI for the EVM bridge contract (or path to ABI file)",
-    }),
-    BRIDGE_EVM_START_BLOCK: envalid.num({
-      default: 0,
-      desc: "Block number to begin polling the EVM bridge contract from",
-    }),
-    BRIDGE_POLL_INTERVAL_MS: envalid.num({
-      default: 15000,
-      desc: "Polling interval in milliseconds for EVM bridge logs",
-    }),
-    BRIDGE_RELAY_ENDPOINT_URL: envalid.str({
-      default: "",
-      desc: "Fallback HTTP endpoint for relaying bridge commands",
-    }),
-    BRIDGE_EVM_RELAY_URL: envalid.str({
-      default: "",
-      desc: "Dedicated HTTP relay endpoint for EVM-bound bridge commands",
-    }),
-    BRIDGE_SOROBAN_RELAY_URL: envalid.str({
-      default: "",
-      desc: "Dedicated HTTP relay endpoint for Soroban-bound bridge commands",
-    }),
   }, {
     reporter: ({ errors, env }) => {
       if (Object.keys(errors).length > 0) {
         throw new Error("Validation Error: " + Object.keys(errors).join(", "));
       }
-    }
+    },
   });
 
   let corsAllowedOrigins;
@@ -191,13 +142,14 @@ function validateEnv() {
     CORS_ALLOWED_ORIGINS: corsAllowedOrigins,
   });
 
-  logger.info("Environment variables validated successfully", {
+  logger.info('Environment variables validated successfully', {
     nodeEnv: validatedConfig.NODE_ENV,
     port: validatedConfig.PORT,
     mongoUri: validatedConfig.MONGO_URI
-      ? validatedConfig.MONGO_URI.replace(/\/\/.*@/, "//***@")
+      ? validatedConfig.MONGO_URI.replace(/\/\/.*@/, '//***@')
       : undefined,
-    sorobanRpcUrls: validatedConfig.SOROBAN_RPC_URLS || validatedConfig.SOROBAN_RPC_URL,
+    sorobanRpcUrls:
+      validatedConfig.SOROBAN_RPC_URLS || validatedConfig.SOROBAN_RPC_URL,
     corsAllowedOrigins: validatedConfig.CORS_ALLOWED_ORIGINS,
   });
 
@@ -211,13 +163,13 @@ function initEnv() {
     try {
       validatedEnv = validateEnv();
     } catch (error) {
-      logger.error("Environment validation failed", {
+      logger.error('Environment validation failed', {
         error: error.message,
       });
-      console.error("\n❌ Environment Validation Error:");
+      console.error('\n❌ Environment Validation Error:');
       console.error(error.message);
       console.error(
-        "\nPlease check your .env file and ensure all required variables are set.",
+        '\nPlease check your .env file and ensure all required variables are set.'
       );
       throw error;
     }

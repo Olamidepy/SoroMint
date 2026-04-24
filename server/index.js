@@ -37,6 +37,8 @@ const webhookRoutes = require("./routes/webhook-routes");
 const bridgeRoutes = require("./routes/bridge-routes");
 const analyticsRoutes = require("./routes/analytics-routes");
 const notificationRoutes = require("./routes/notification-routes");
+const multiSigRoutes = require("./routes/multisig-routes");
+const vaultRoutes = require("./routes/vault-routes");
 const { getBridgeRelayer } = require("./services/bridge-relayer");
 
 const createApp = ({ authRouter = authRoutes, tokenRouter = tokenRoutes } = {}) => {
@@ -61,6 +63,8 @@ const createApp = ({ authRouter = authRoutes, tokenRouter = tokenRoutes } = {}) 
   app.use("/api", bridgeRoutes);
   app.use("/api/auth", authRouter);
   app.use("/api", webhookRoutes);
+  app.use("/api/multisig", multiSigRoutes);
+  app.use("/api/vault", vaultRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
