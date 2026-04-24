@@ -122,37 +122,43 @@ function validateEnv() {
       default: 3600,
       desc: "Cache TTL (Time-To-Live) in seconds for token metadata (default: 1 hour)",
     }),
-    PINATA_API_KEY: envalid.str({
+    // AWS S3 Backup Configuration
+    AWS_REGION: envalid.str({
+      default: "us-east-1",
+      desc: "AWS region for S3 backup storage",
+      example: "us-east-1",
+    }),
+    AWS_ACCESS_KEY_ID: envalid.str({
       default: "",
-      desc: "Pinata API key for IPFS pinning",
+      desc: "AWS access key ID for S3 backup storage",
     }),
-    PINATA_SECRET_API_KEY: envalid.str({
+    AWS_SECRET_ACCESS_KEY: envalid.str({
       default: "",
-      desc: "Pinata secret API key for IPFS pinning",
+      desc: "AWS secret access key for S3 backup storage",
     }),
-    GOOGLE_CLIENT_ID: envalid.str({
+    AWS_S3_BACKUP_BUCKET: envalid.str({
       default: "",
-      desc: "Google OAuth2 Client ID",
+      desc: "S3 bucket name for storing encrypted backups",
+      example: "soromint-backups",
     }),
-    GOOGLE_CLIENT_SECRET: envalid.str({
+    BACKUP_ENCRYPTION_PASSWORD: envalid.str({
       default: "",
-      desc: "Google OAuth2 Client Secret",
+      desc: "Password for encrypting backups (AES-256-GCM). If not set, a random password will be generated",
     }),
-    GITHUB_CLIENT_ID: envalid.str({
+    BACKUP_CRON_SCHEDULE: envalid.str({
+      default: "0 2 * * *",
+      desc: "Cron schedule for automated backups (default: daily at 02:00 UTC)",
+      example: "0 2 * * *",
+    }),
+    RECOVERY_TEST_CRON_SCHEDULE: envalid.str({
+      default: "0 3 * * *",
+      desc: "Cron schedule for automated recovery tests (default: daily at 03:00 UTC)",
+      example: "0 3 * * *",
+    }),
+    TEST_MONGO_URI: envalid.str({
       default: "",
-      desc: "GitHub OAuth2 Client ID",
-    }),
-    GITHUB_CLIENT_SECRET: envalid.str({
-      default: "",
-      desc: "GitHub OAuth2 Client Secret",
-    }),
-    SESSION_SECRET: envalid.str({
-      default: "keyboard-cat-soromint-default",
-      desc: "Secret for express-session",
-    }),
-    AUTH_CALLBACK_URL: envalid.str({
-      default: "http://localhost:5000",
-      desc: "Base URL for OAuth callbacks",
+      desc: "MongoDB URI for testing backup restoration (optional)",
+      example: "mongodb://localhost:27017/soromint_test",
     }),
   }, {
     reporter: ({ errors, env }) => {
@@ -214,6 +220,21 @@ function validateEnv() {
           'Generate one with: node -e "const {Keypair}=require(\'@stellar/stellar-sdk\');console.log(Keypair.random().secret())"',
         example:
           'SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+      }),
+      PLATFORM_SECRET_KEY: envalid.str({
+        default: '',
+        desc:
+          'Stellar secret key (S-address) used to sign fee-bump sponsorship transactions on behalf of the platform',
+        example:
+          'SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+      }),
+      SPONSORSHIP_ENABLED: envalid.bool({
+        default: false,
+        desc: 'Enable fee sponsorship (gasless) transaction routes and execution',
+      }),
+      MAX_SPONSORSHIP_FEE_STROOPS: envalid.num({
+        default: 1000000,
+        desc: 'Maximum fee in stroops the platform will sponsor for a single transaction',
       }),
       SENTRY_DSN: envalid.str({
         default: '',

@@ -15,9 +15,6 @@ const { getCacheService } = require("./services/cache-service");
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const session = require("express-session");
-const passport = require("passport");
-const { initPassport } = require("./config/passport-config");
 const { securityHeaders } = require("./middleware/security-headers");
 const { createCorsOptionsDelegate } = require("./config/cors-config");
 
@@ -41,31 +38,19 @@ const analyticsRoutes = require("./routes/analytics-routes");
 const notificationRoutes = require("./routes/notification-routes");
 const multiSigRoutes = require("./routes/multisig-routes");
 const vaultRoutes = require("./routes/vault-routes");
+const nftRoutes = require("./routes/nft-routes");
 
 const createApp = ({ authRouter = authRoutes, tokenRouter = tokenRoutes } = {}) => {
   const app = express();
   const corsMiddleware = cors(createCorsOptionsDelegate());
-  const env = getEnv();
 
   initSentry(app);
-  initPassport();
-
   app.use(securityHeaders);
   app.use(correlationIdMiddleware);
   app.use(httpLoggerMiddleware);
   app.use(corsMiddleware);
   app.options("*", corsMiddleware);
   app.use(express.json());
-  
-  // Passport and Session setup
-  app.use(session({
-    secret: env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: { secure: env.NODE_ENV === 'production' }
-  }));
-  app.use(passport.initialize());
-  app.use(passport.session());
 
   setupSwagger(app);
 
@@ -78,6 +63,8 @@ const createApp = ({ authRouter = authRoutes, tokenRouter = tokenRoutes } = {}) 
   app.use("/api", webhookRoutes);
   app.use("/api/multisig", multiSigRoutes);
   app.use("/api/vault", vaultRoutes);
+  app.use("/api/nfts", nftRoutes);
+  app.use(express.static("public"));
 
   app.use(notFoundHandler);
   app.use(errorHandler);
